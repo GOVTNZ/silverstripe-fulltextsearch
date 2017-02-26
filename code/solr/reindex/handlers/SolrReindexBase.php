@@ -7,6 +7,14 @@ use Psr\Log\LoggerInterface;
  */
 abstract class SolrReindexBase implements SolrReindexHandler {
 
+	public $recordFilter;
+	public $queryFilter;
+
+	static $dependencies = array(
+		'recordFilter' => '%$RecordFilterService',
+		'queryFilter' => '%$QueryFilterService'
+	);
+
 	public function runReindex(LoggerInterface $logger, $batchSize, $taskName, $classes = null) {
 		foreach (Solr::get_indexes() as $indexInstance) {
 			$this->processIndex($logger, $indexInstance, $batchSize, $taskName, $classes);
@@ -175,7 +183,7 @@ abstract class SolrReindexBase implements SolrReindexHandler {
 	protected function getRecordsInGroup(SolrIndex $indexInstance, $class, $groups, $group) {
 		// Generate filtered list of local records
 		$baseClass = ClassInfo::baseDataClass($class);
-		$items = DataList::create($class)
+		$query = DataList::create($class)
 			->where(sprintf(
 				'"%s"."ID" %% \'%d\' = \'%d\'',
 				$baseClass,
@@ -184,11 +192,24 @@ abstract class SolrReindexBase implements SolrReindexHandler {
 			))
 			->sort("ID");
 
+		// apply user defined custom query
+		if ($this->queryFilter) {
+			$query = $this->queryFilter->filter($indexInstance, $class, $query);
+		}
+		$items = $query;
+
 		// Add child filter
 		$classes = $indexInstance->getClasses();
 		$options = $classes[$class];
 		if(!$options['include_children']) {
 			$items = $items->filter('ClassName', $class);
+		}
+
+		// apply user filter to results if configured
+		if ($this->recordFilter) {
+			$items = $items->filterByCallback(function($item, $items) use ($indexInstance) {
+				return $this->recordFilter->isRecordForThisIndex($indexInstance->class, $item);
+			});
 		}
 
 		return $items;

@@ -26,6 +26,13 @@ abstract class SearchUpdateProcessor {
 	 */
 	protected $dirty;
 	
+	public $recordFilter;
+
+	static $dependencies = array(
+		'recordFilter' => '%$RecordFilterService'
+	);
+
+
 	public function __construct() {
 		$this->dirty = array();
 	}
@@ -76,7 +83,14 @@ abstract class SearchUpdateProcessor {
 				$objs = DataObject::get($base)->byIDs(array_keys($ids));
 				foreach ($objs as $obj) {
 					foreach ($ids[$obj->ID] as $index) {
-						if (!$indexes[$index]->variantStateExcluded($state)) {
+						$exclude = $indexes[$index]->variantStateExcluded($state);
+
+						// apply user filter to results if configured
+						if (!$exclude && $this->recordFilter) {
+							$exclude = !$this->recordFilter->isRecordForThisIndex($index, $obj);
+						}
+
+						if (!$exclude) {
 							$indexes[$index]->add($obj);
 							$dirtyIndexes[$index] = $indexes[$index];
 						}
