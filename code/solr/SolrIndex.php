@@ -629,7 +629,6 @@ abstract class SolrIndex extends SearchIndex {
 			$params,
 			Apache_Solr_Service::METHOD_POST
 		);
-        var_dump($res->highlighting);
 
 		$results = new ArrayList();
 		if($res->getHttpStatus() >= 200 && $res->getHttpStatus() < 300) {
